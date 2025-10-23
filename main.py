@@ -549,8 +549,8 @@ class FFmpegRunner:
         display_video = self.config.display_dir / "video.mp4"
         display_image = self.config.display_dir / "image.jpg"
         filter_chain = (
-            "scale=1920:1080:force_original_aspect_ratio=decrease,"
-            "pad=1920:1080:(ow-iw)/2:(oh-ih)/2,"
+            "scale=1280:720:force_original_aspect_ratio=decrease,"
+            "pad=1280:720:(ow-iw)/2:(oh-ih)/2,"
             "setsar=1"
         )
 
@@ -602,7 +602,7 @@ class FFmpegRunner:
             video_mode = "image"
             video_output_args = list(reencode_video_args)
         else:
-            video_input = ["-f", "lavfi", "-re", "-i", "color=c=black:s=1920x1080:r=30"]
+            video_input = ["-f", "lavfi", "-re", "-i", "color=c=black:s=1280x720:r=30"]
             video_mode = "color"
             video_output_args = list(reencode_video_args)
 
@@ -622,7 +622,7 @@ class FFmpegRunner:
             "-c:a",
             "aac",
             "-b:a",
-            "128k",
+            "96k",
             "-ar",
             str(self.config.audio_sample_rate),
             "-ac",
