@@ -19,3 +19,5 @@ Thumbs.db
 *.gz
 *.zip
 
+# Generated media
+display/video_prepared.mp4

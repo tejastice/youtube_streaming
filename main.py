@@ -96,6 +96,10 @@ class Config:
             ffmpeg_path=ffmpeg_path,
         )
 
+    @property
+    def prepared_video_path(self) -> Path:
+        return self.display_dir / "video_prepared.mp4"
+
 
 # -------------------------------------------------------------------------------------------------
 # Discord notifier
@@ -468,6 +472,79 @@ class FFmpegRunner:
         for path in (self.config.audio_dir, self.config.display_dir):
             path.mkdir(parents=True, exist_ok=True)
 
+    def _prepare_video_asset(self, filter_chain: str) -> Optional[Path]:
+        """Transcode the display video once so streaming can use copy mode."""
+        source = self.config.display_dir / "video.mp4"
+        if not source.exists():
+            return None
+
+        target = self.config.prepared_video_path
+        try:
+            if target.exists() and target.stat().st_mtime >= source.stat().st_mtime:
+                return target
+        except OSError as exc:
+            print(f"[ffmpeg] failed to stat prepared video: {exc}")
+
+        tmp_target = target.with_name(f"{target.stem}.tmp{target.suffix}")
+        if tmp_target.exists():
+            try:
+                tmp_target.unlink()
+            except OSError:
+                pass
+
+        cmd = [
+            self.config.ffmpeg_path,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            str(source),
+            "-vf",
+            filter_chain,
+            "-r",
+            "30",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "ultrafast",
+            "-pix_fmt",
+            "yuv420p",
+            "-b:v",
+            "500k",
+            "-maxrate",
+            "500k",
+            "-bufsize",
+            "1000k",
+            "-g",
+            "60",
+            "-keyint_min",
+            "60",
+            "-sc_threshold",
+            "0",
+            "-movflags",
+            "+faststart",
+            "-an",
+            str(tmp_target),
+        ]
+
+        try:
+            print("[ffmpeg] preparing optimized video asset (one-time encode).")
+            subprocess.run(cmd, check=True)
+            tmp_target.replace(target)
+            return target
+        except subprocess.CalledProcessError as exc:
+            print(f"[ffmpeg] failed to prepare optimized video: {exc}")
+        except Exception as exc:
+            print(f"[ffmpeg] unexpected error preparing video: {exc}")
+
+        try:
+            if tmp_target.exists():
+                tmp_target.unlink()
+        except OSError:
+            pass
+        return None
+
     def _build_ffmpeg_command(self) -> Tuple[List[str], str]:
         display_video = self.config.display_dir / "video.mp4"
         display_image = self.config.display_dir / "image.jpg"
@@ -476,6 +553,8 @@ class FFmpegRunner:
             "pad=1920:1080:(ow-iw)/2:(oh-ih)/2,"
             "setsar=1"
         )
+
+        prepared_video = self._prepare_video_asset(filter_chain)
 
         base_cmd = [
             self.config.ffmpeg_path,
@@ -487,25 +566,45 @@ class FFmpegRunner:
             "-nostdin",
         ]
 
-        video_mode = "video"
-        target_bitrate_k = 1000  # kilobits per second
-        maxrate_k = 1000
-        bufsize_k = 2000
+        reencode_video_args = [
+            "-vf",
+            filter_chain,
+            "-c:v",
+            "libx264",
+            "-preset",
+            "ultrafast",
+            "-tune",
+            "zerolatency",
+            "-pix_fmt",
+            "yuv420p",
+            "-b:v",
+            "500k",
+            "-maxrate",
+            "500k",
+            "-bufsize",
+            "1000k",
+            "-g",
+            "60",
+            "-r",
+            "30",
+        ]
 
-        if display_video.exists():
+        if prepared_video:
+            video_input = ["-re", "-stream_loop", "-1", "-i", str(prepared_video)]
+            video_mode = "video_copy"
+            video_output_args = ["-c:v", "copy"]
+        elif display_video.exists():
             video_input = ["-re", "-stream_loop", "-1", "-i", str(display_video)]
+            video_mode = "video"
+            video_output_args = list(reencode_video_args)
         elif display_image.exists():
             video_input = ["-loop", "1", "-framerate", "30", "-i", str(display_image)]
             video_mode = "image"
-            target_bitrate_k = 500
-            maxrate_k = 500
-            bufsize_k = 1000
+            video_output_args = list(reencode_video_args)
         else:
             video_input = ["-f", "lavfi", "-re", "-i", "color=c=black:s=1920x1080:r=30"]
             video_mode = "color"
-            target_bitrate_k = 500
-            maxrate_k = 500
-            bufsize_k = 1000
+            video_output_args = list(reencode_video_args)
 
         audio_input = [
             "-f",
@@ -519,27 +618,7 @@ class FFmpegRunner:
         ]
 
         output_url = f"{self.config.stream_url}/{self.config.stream_key}"
-        output_args = [
-            "-vf",
-            filter_chain,
-            "-c:v",
-            "libx264",
-            "-preset",
-            "veryfast",
-            "-tune",
-            "zerolatency",
-            "-pix_fmt",
-            "yuv420p",
-            "-b:v",
-            f"{target_bitrate_k}k",
-            "-maxrate",
-            f"{maxrate_k}k",
-            "-bufsize",
-            f"{bufsize_k}k",
-            "-g",
-            "60",
-            "-r",
-            "30",
+        output_args = video_output_args + [
             "-c:a",
             "aac",
             "-b:a",
