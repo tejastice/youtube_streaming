@@ -17,8 +17,8 @@ python main.py
 ```
 
 ## Deployment Notes
-- `Procfile` declares a `worker` process that runs `python main.py`.
-- `nixpacks.toml` instructs Railway/Nixpacks to install `ffmpeg`.
+- `Procfile` declares a `worker`プロセスとして`python main.py`を実行します。
+- RailwayでNixpacksを使う場合は`nixpacks.toml`が`ffmpeg`をインストールします（Dockerfileを使う場合は不要）。
 - Set the following environment variables in your hosting platform:
   - `YOUTUBE_STREAM_URL`
   - `YOUTUBE_STREAM_KEY`
@@ -27,7 +27,7 @@ python main.py
 ### Railway Workflow (GitHub Integration)
 1. Push this directory to a new GitHub repository.
 2. Create a Railway project with **Deploy from GitHub**, select your repository, and leave the default build settings (Nixpacks will detect Python).
-3. In Railway → Variables, add the environment variables listed above.
-4. Deploy; the `worker` service defined in the `Procfile` starts automatically and begins streaming.
+3. RailwayでDockerビルドを使う場合は、リポジトリ直下の`Dockerfile`が自動で選択され、イメージ内で`ffmpeg`をapt経由で導入します。Nixpacksを使いたい場合は`nixpacks.toml`を維持してください。
+4. Railway → Variablesで上記環境変数を設定したらデプロイします。`Procfile`の`worker`（またはDockerのCMD）が起動して配信を開始します。
 
 Refer to `requirements.md` for the original functional specification.
