@@ -480,7 +480,14 @@ class FFmpegRunner:
         return None
 
     def _prepare_static_video(
-        self, filter_chain: str, image_path: Optional[Path], duration: int
+        self,
+        filter_chain: str,
+        image_path: Optional[Path],
+        duration: int,
+        target_fps: int,
+        target_maxrate: str,
+        target_bufsize: str,
+        target_crf: str,
     ) -> Optional[Path]:
         """Transcode the display image once so streaming can use copy mode."""
         if not image_path:
@@ -513,7 +520,7 @@ class FFmpegRunner:
             "-vf",
             filter_chain,
             "-r",
-            "30",
+            str(target_fps),
             "-t",
             str(duration),
             "-c:v",
@@ -524,14 +531,18 @@ class FFmpegRunner:
             "stillimage",
             "-pix_fmt",
             "yuv420p",
-            "-b:v",
-            "150k",
+            "-crf",
+            target_crf,
             "-maxrate",
-            "150k",
+            target_maxrate,
             "-bufsize",
-            "300k",
+            target_bufsize,
+            "-b:v",
+            "0",
             "-g",
-            "60",
+            str(target_fps),
+            "-keyint_min",
+            str(target_fps),
             "-sc_threshold",
             "0",
             "-movflags",
@@ -565,7 +576,20 @@ class FFmpegRunner:
             "setsar=1"
         )
 
-        prepared_video = self._prepare_static_video(filter_chain, display_image, 120)
+        target_fps = 5
+        target_maxrate = "100k"
+        target_bufsize = "200k"
+        target_crf = "23"
+
+        prepared_video = self._prepare_static_video(
+            filter_chain,
+            display_image,
+            duration=120,
+            target_fps=target_fps,
+            target_maxrate=target_maxrate,
+            target_bufsize=target_bufsize,
+            target_crf=target_crf,
+        )
 
         base_cmd = [
             self.config.ffmpeg_path,
@@ -588,16 +612,20 @@ class FFmpegRunner:
             "stillimage",
             "-pix_fmt",
             "yuv420p",
-            "-b:v",
-            "150k",
+            "-crf",
+            target_crf,
             "-maxrate",
-            "150k",
+            target_maxrate,
             "-bufsize",
-            "300k",
+            target_bufsize,
+            "-b:v",
+            "0",
             "-g",
-            "60",
+            str(target_fps),
+            "-keyint_min",
+            str(target_fps),
             "-r",
-            "30",
+            str(target_fps),
         ]
 
         if prepared_video:
@@ -605,11 +633,24 @@ class FFmpegRunner:
             video_mode = "image_copy"
             video_output_args = ["-c:v", "copy"]
         elif display_image:
-            video_input = ["-loop", "1", "-framerate", "30", "-i", str(display_image)]
+            video_input = [
+                "-loop",
+                "1",
+                "-framerate",
+                str(target_fps),
+                "-i",
+                str(display_image),
+            ]
             video_mode = "image_encode"
             video_output_args = list(reencode_video_args)
         else:
-            video_input = ["-f", "lavfi", "-re", "-i", "color=c=black:s=1280x720:r=30"]
+            video_input = [
+                "-f",
+                "lavfi",
+                "-re",
+                "-i",
+                f"color=c=black:s=1280x720:r={target_fps}",
+            ]
             video_mode = "color"
             video_output_args = list(reencode_video_args)
 
