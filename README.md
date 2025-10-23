@@ -1,34 +1,23 @@
-# Autonomous YouTube Streamer
+# Railway経由でストリーミング配信をする方法
 
-Python tool that continuously streams shuffled audio tracks together with a static display image (auto-looped as video) to YouTube Live via RTMP. Environment variables provide the stream endpoint, credentials, and optional Discord webhook notifications.
+## フォーク
+1. GitHub 上でこのリポジトリを自分のアカウントへフォークします。
+2. （コードをローカル編集したい場合のみ）フォークしたリポジトリをクローンし、仮想環境の構築や依存パッケージのインストールを行ってください。
 
-## Prerequisites
-- Python 3.11.x
-- `ffmpeg` available on `PATH`
-- RTMP stream URL/key for the YouTube Live event
+## 音声ファイルと画像を入れ替える
+1. `audio/` ディレクトリに配信したい MP3 を配置します（複数可、再生順はランダム）。
+2. `display/` ディレクトリに静止画 `image.jpg` を配置します。初回起動時に自動で 480p/30fps・80kbps の120秒ループ動画に変換し、以降はそれを利用します。
 
-## Local Setup
-```bash
-python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env        # fill in your stream credentials
-python main.py
-```
+## Railwayでデプロイ
+1. GitHub にプッシュしたリポジトリを Railway の「New Project > Deploy from GitHub」で連携します。
+2. ビルド方式はデフォルト（Nixpacks）で構いませんが、必要に応じて Dockerfile を利用することも可能です。
+3. デプロイ後、`Procfile` に定義された `worker: python main.py` が自動的に起動し、配信プロセスがスタートします。
 
-## Deployment Notes
-- `Procfile` declares a `worker`プロセスとして`python main.py`を実行します。
-- RailwayでNixpacksを使う場合は`nixpacks.toml`が`ffmpeg`をインストールします（Dockerfileを使う場合は不要）。
-- 初回起動時に`display/image.(jpg|png)`があれば、80kbps/480p/30fps・120秒ループの`display/image_prepared.mp4`を生成し、その後はコピー配信でCPU負荷を抑えます。
-- Set the following environment variables in your hosting platform:
-- `YOUTUBE_STREAM_URL`
-- `YOUTUBE_STREAM_KEY`
-- `DISCORD_WEBHOOK_URL` (optional)
+## Railwayで変数を入れる
+Railway プロジェクトの Variables に以下の環境変数を設定します。
 
-### Railway Workflow (GitHub Integration)
-1. Push this directory to a new GitHub repository.
-2. Create a Railway project with **Deploy from GitHub**, select your repository, and leave the default build settings (Nixpacks will detect Python).
-3. RailwayでDockerビルドを使う場合は、リポジトリ直下の`Dockerfile`が自動で選択され、イメージ内で`ffmpeg`をapt経由で導入します。Nixpacksを使いたい場合は`nixpacks.toml`を維持してください。
-4. Railway → Variablesで上記環境変数を設定したらデプロイします。`Procfile`の`worker`（またはDockerのCMD）が起動して配信を開始します。
+- `YOUTUBE_STREAM_URL` : YouTube Live の RTMP エンドポイント URL
+- `YOUTUBE_STREAM_KEY` : 対応するストリームキー
+- `DISCORD_WEBHOOK_URL` : 任意。設定すると起動・停止通知および日次ステータスを Discord に送信します。
 
-Refer to `requirements.md` for the original functional specification.
+これらを設定してデプロイが完了すると、`audio/` と `display/` の内容を組み合わせた配信が自動的に開始されます。静止画は 480p/30fps の80kbps、音声は 64kbps AAC でエンコードされ、曲間には 2 秒の無音が挿入されます。
