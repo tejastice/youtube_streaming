@@ -359,12 +359,16 @@ class AudioFeeder(threading.Thread):
             print(f"[audio] failed to stream {track.name}: {exc}")
         return True
 
-    def _emit_silence(self, duration_seconds: int) -> bool:
+    def _emit_silence(self, duration_seconds: float) -> bool:
         bytes_per_second = (
             self.config.audio_sample_rate * self.config.audio_channels * 2
         )
+        total_bytes = int(duration_seconds * bytes_per_second)
+        if total_bytes <= 0:
+            return True
+
         silent_chunk = b"\x00" * min(bytes_per_second, 65536)
-        remaining = duration_seconds * bytes_per_second
+        remaining = total_bytes
         while remaining > 0 and not self.stop_event.is_set():
             to_write = silent_chunk[: min(len(silent_chunk), remaining)]
             try:
@@ -381,7 +385,7 @@ class AudioFeeder(threading.Thread):
         delay = self.config.track_gap_seconds
         if delay <= 0:
             return True
-        return not self.stop_event.wait(delay)
+        return self._emit_silence(delay)
 
 
 # -------------------------------------------------------------------------------------------------
@@ -570,8 +574,8 @@ class FFmpegRunner:
     def _build_ffmpeg_command(self) -> Tuple[List[str], str]:
         display_image = self._resolve_display_image()
         filter_chain = (
-            "scale=1280:720:force_original_aspect_ratio=decrease,"
-            "pad=1280:720:(ow-iw)/2:(oh-ih)/2,"
+            "scale=854:480:force_original_aspect_ratio=decrease,"
+            "pad=854:480:(ow-iw)/2:(oh-ih)/2,"
             "setsar=1"
         )
 
@@ -644,7 +648,7 @@ class FFmpegRunner:
                 "lavfi",
                 "-re",
                 "-i",
-                f"color=c=black:s=1280x720:r={target_fps}",
+                f"color=c=black:s=854x480:r={target_fps}",
             ]
             video_mode = "color"
             video_output_args = list(reencode_video_args)
