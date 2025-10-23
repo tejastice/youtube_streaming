@@ -69,6 +69,7 @@ class Config:
     ffmpeg_path: str
     audio_sample_rate: int = 44100
     audio_channels: int = 2
+    track_gap_seconds: float = 2.0
 
     @classmethod
     def from_environment(cls) -> "Config":
@@ -85,7 +86,6 @@ class Config:
         ffmpeg_path = shutil.which("ffmpeg")
         if not ffmpeg_path:
             raise RuntimeError("ffmpeg executable not found in PATH.")
-
         return cls(
             stream_url=stream_url.rstrip("/"),
             stream_key=stream_key.strip(),
@@ -301,6 +301,9 @@ class AudioFeeder(threading.Thread):
                     self.metrics.update_current_track(track.name)
                     if not self._stream_track(track):
                         return
+                    self.metrics.update_current_track(None)
+                    if not self._sleep_between_tracks():
+                        return
         finally:
             self.metrics.update_current_track(None)
             try:
@@ -368,6 +371,13 @@ class AudioFeeder(threading.Thread):
             remaining -= len(to_write)
             time.sleep(len(to_write) / bytes_per_second)
         return True
+
+    def _sleep_between_tracks(self) -> bool:
+        """Pause between tracks; return False if stopped during the wait."""
+        delay = self.config.track_gap_seconds
+        if delay <= 0:
+            return True
+        return not self.stop_event.wait(delay)
 
 
 # -------------------------------------------------------------------------------------------------
@@ -478,9 +488,9 @@ class FFmpegRunner:
         ]
 
         video_mode = "video"
-        target_bitrate_k = 5000  # kilobits per second
-        maxrate_k = 5000
-        bufsize_k = 10000
+        target_bitrate_k = 1000  # kilobits per second
+        maxrate_k = 1000
+        bufsize_k = 2000
 
         if display_video.exists():
             video_input = ["-re", "-stream_loop", "-1", "-i", str(display_video)]
@@ -623,4 +633,3 @@ def format_metrics(metrics: MetricsStore) -> str:
 
 if __name__ == "__main__":
     main()
-

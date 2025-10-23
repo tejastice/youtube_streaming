@@ -20,9 +20,9 @@ python main.py
 - `Procfile` declares a `worker`プロセスとして`python main.py`を実行します。
 - RailwayでNixpacksを使う場合は`nixpacks.toml`が`ffmpeg`をインストールします（Dockerfileを使う場合は不要）。
 - Set the following environment variables in your hosting platform:
-  - `YOUTUBE_STREAM_URL`
-  - `YOUTUBE_STREAM_KEY`
-  - `DISCORD_WEBHOOK_URL` (optional)
+- `YOUTUBE_STREAM_URL`
+- `YOUTUBE_STREAM_KEY`
+- `DISCORD_WEBHOOK_URL` (optional)
 
 ### Railway Workflow (GitHub Integration)
 1. Push this directory to a new GitHub repository.
