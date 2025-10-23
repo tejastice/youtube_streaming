@@ -480,7 +480,7 @@ class FFmpegRunner:
         return None
 
     def _prepare_static_video(
-        self, filter_chain: str, image_path: Optional[Path]
+        self, filter_chain: str, image_path: Optional[Path], duration: int
     ) -> Optional[Path]:
         """Transcode the display image once so streaming can use copy mode."""
         if not image_path:
@@ -515,7 +515,7 @@ class FFmpegRunner:
             "-r",
             "30",
             "-t",
-            "1",
+            str(duration),
             "-c:v",
             "libx264",
             "-preset",
@@ -525,13 +525,13 @@ class FFmpegRunner:
             "-pix_fmt",
             "yuv420p",
             "-b:v",
-            "300k",
+            "150k",
             "-maxrate",
-            "300k",
+            "150k",
             "-bufsize",
-            "600k",
+            "300k",
             "-g",
-            "30",
+            "60",
             "-sc_threshold",
             "0",
             "-movflags",
@@ -565,7 +565,7 @@ class FFmpegRunner:
             "setsar=1"
         )
 
-        prepared_video = self._prepare_static_video(filter_chain, display_image)
+        prepared_video = self._prepare_static_video(filter_chain, display_image, 120)
 
         base_cmd = [
             self.config.ffmpeg_path,
@@ -589,13 +589,13 @@ class FFmpegRunner:
             "-pix_fmt",
             "yuv420p",
             "-b:v",
-            "300k",
+            "150k",
             "-maxrate",
-            "300k",
+            "150k",
             "-bufsize",
-            "600k",
+            "300k",
             "-g",
-            "30",
+            "60",
             "-r",
             "30",
         ]
