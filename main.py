@@ -623,3 +623,4 @@ def format_metrics(metrics: MetricsStore) -> str:
 
 if __name__ == "__main__":
     main()
+
