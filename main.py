@@ -485,6 +485,8 @@ class FFmpegRunner:
         image_path: Optional[Path],
         duration: int,
         target_fps: int,
+        target_bitrate: str,
+        target_bufsize: str,
     ) -> Optional[Path]:
         """Transcode the display image once so streaming can use copy mode."""
         if not image_path:
@@ -498,117 +500,71 @@ class FFmpegRunner:
             print(f"[ffmpeg] failed to stat prepared static video: {exc}")
 
         tmp_target = target.with_name(f"{target.stem}.tmp{target.suffix}")
-        burst_tmp = target.with_name(f"{target.stem}.burst{target.suffix}")
-        steady_tmp = target.with_name(f"{target.stem}.steady{target.suffix}")
-        concat_file = target.with_suffix(".concat.txt")
+        if tmp_target.exists():
+            try:
+                tmp_target.unlink()
+            except OSError:
+                pass
 
-        for path in (tmp_target, burst_tmp, steady_tmp, concat_file):
-            if path.exists():
-                try:
-                    path.unlink()
-                except OSError:
-                    pass
+        keyint = max(target_fps, target_fps * 2)
 
-        burst_duration = min(duration, 5)
-        steady_duration = max(duration - burst_duration, 0)
-        segments: List[Path] = []
-
-        def _encode_segment(output: Path, seconds: int, bitrate: str, bufsize: str) -> None:
-            cmd = [
-                self.config.ffmpeg_path,
-                "-hide_banner",
-                "-loglevel",
-                "error",
-                "-y",
-                "-loop",
-                "1",
-                "-i",
-                str(image_path),
-                "-vf",
-                filter_chain,
-                "-r",
-                str(target_fps),
-                "-t",
-                str(seconds),
-                "-c:v",
-                "libx264",
-                "-preset",
-                "ultrafast",
-                "-tune",
-                "stillimage",
-                "-pix_fmt",
-                "yuv420p",
-                "-b:v",
-                bitrate,
-                "-maxrate",
-                bitrate,
-                "-bufsize",
-                bufsize,
-                "-g",
-                str(target_fps),
-                "-keyint_min",
-                str(target_fps),
-                "-sc_threshold",
-                "0",
-                "-movflags",
-                "+faststart",
-                "-an",
-                str(output),
-            ]
-            subprocess.run(cmd, check=True)
+        cmd = [
+            self.config.ffmpeg_path,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-loop",
+            "1",
+            "-i",
+            str(image_path),
+            "-vf",
+            filter_chain,
+            "-r",
+            str(target_fps),
+            "-t",
+            str(duration),
+            "-c:v",
+            "libx264",
+            "-preset",
+            "ultrafast",
+            "-tune",
+            "stillimage",
+            "-pix_fmt",
+            "yuv420p",
+            "-b:v",
+            target_bitrate,
+            "-maxrate",
+            target_bitrate,
+            "-bufsize",
+            target_bufsize,
+            "-g",
+            str(keyint),
+            "-keyint_min",
+            str(keyint),
+            "-sc_threshold",
+            "0",
+            "-movflags",
+            "+faststart",
+            "-an",
+            str(tmp_target),
+        ]
 
         try:
-            if burst_duration > 0:
-                print("[ffmpeg] preparing burst segment (high bitrate).")
-                _encode_segment(burst_tmp, burst_duration, "200k", "400k")
-                segments.append(burst_tmp)
-
-            if steady_duration > 0:
-                print("[ffmpeg] preparing steady segment (low bitrate).")
-                _encode_segment(steady_tmp, steady_duration, "25k", "50k")
-                segments.append(steady_tmp)
-
-            if not segments:
-                return None
-
-            if len(segments) == 1:
-                segments[0].replace(target)
-                return target
-
-            with concat_file.open("w", encoding="utf-8") as handle:
-                for segment in segments:
-                    handle.write(f"file '{segment.as_posix()}'\n")
-
-            concat_cmd = [
-                self.config.ffmpeg_path,
-                "-hide_banner",
-                "-loglevel",
-                "error",
-                "-y",
-                "-f",
-                "concat",
-                "-safe",
-                "0",
-                "-i",
-                str(concat_file),
-                "-c",
-                "copy",
-                str(tmp_target),
-            ]
-            subprocess.run(concat_cmd, check=True)
+            print("[ffmpeg] preparing optimized static video asset (one-time encode).")
+            subprocess.run(cmd, check=True)
             tmp_target.replace(target)
             return target
         except subprocess.CalledProcessError as exc:
             print(f"[ffmpeg] failed to prepare static video: {exc}")
         except Exception as exc:
             print(f"[ffmpeg] unexpected error preparing static video: {exc}")
-        finally:
-            for path in (burst_tmp, steady_tmp, concat_file, tmp_target):
-                if path.exists():
-                    try:
-                        path.unlink()
-                    except OSError:
-                        pass
+
+        try:
+            if tmp_target.exists():
+                tmp_target.unlink()
+        except OSError:
+            pass
         return None
 
     def _build_ffmpeg_command(self) -> Tuple[List[str], str]:
@@ -619,13 +575,15 @@ class FFmpegRunner:
             "setsar=1"
         )
 
-        target_fps = 5
+        target_fps = 30
 
         prepared_video = self._prepare_static_video(
             filter_chain,
             display_image,
             duration=120,
             target_fps=target_fps,
+            target_bitrate="80k",
+            target_bufsize="160k",
         )
 
         base_cmd = [
@@ -637,6 +595,8 @@ class FFmpegRunner:
             "pipe:2",
             "-nostdin",
         ]
+
+        keyint = max(target_fps, target_fps * 2)
 
         reencode_video_args = [
             "-vf",
@@ -650,15 +610,15 @@ class FFmpegRunner:
             "-pix_fmt",
             "yuv420p",
             "-b:v",
-            "25k",
+            "80k",
             "-maxrate",
-            "25k",
+            "80k",
             "-bufsize",
-            "50k",
+            "160k",
             "-g",
-            str(target_fps),
+            str(keyint),
             "-keyint_min",
-            str(target_fps),
+            str(keyint),
             "-r",
             str(target_fps),
         ]

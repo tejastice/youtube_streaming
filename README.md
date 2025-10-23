@@ -19,7 +19,7 @@ python main.py
 ## Deployment Notes
 - `Procfile` declares a `worker`プロセスとして`python main.py`を実行します。
 - RailwayでNixpacksを使う場合は`nixpacks.toml`が`ffmpeg`をインストールします（Dockerfileを使う場合は不要）。
-- 初回起動時に`display/image.(jpg|png)`があれば、先頭5秒を200kbps・以降を25kbpsでエンコードした720p/5fps・120秒ループの`display/image_prepared.mp4`を生成し、その後はコピー配信でCPU負荷を抑えます。
+- 初回起動時に`display/image.(jpg|png)`があれば、80kbps/720p/30fps・120秒ループの`display/image_prepared.mp4`を生成し、その後はコピー配信でCPU負荷を抑えます。
 - Set the following environment variables in your hosting platform:
 - `YOUTUBE_STREAM_URL`
 - `YOUTUBE_STREAM_KEY`
